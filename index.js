@@ -21,4 +21,4 @@ client.once('ready', () => {
 });
 
 // ใส่ Token ตรงนี้
-client.login(process.env.DISCORD_TOKEN);
+client.login('MTUxMzExNTkxNDc5NzcxNTU1Ng.Gfkk8r.GsKomloSIIS3CJAf3H7KtwkzZUFdLFolg0Hg2U',); 
