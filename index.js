@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-// --- เพิ่ม Web Server สำหรับรองรับ UptimeRobot / Render Health Check ---
+// --- Express Web Server สำหรับ UptimeRobot / Render Health Check ---
 const express = require('express');
 const app = express();
 app.get('/', (req, res) => res.send('Nate Bot is Online 24/7!'));
@@ -37,6 +37,9 @@ const client = new Client({
 
 const userBalances = new Map(); 
 const userRobloxNames = new Map(); 
+
+// ใช้ Cookie ที่คุณส่งมาโดยตรง (หรือดึงจาก Environment Variables หากมี)
+const ROBLOX_COOKIE = process.env.ROBLOX_COOKIE || '_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEQAhoGCAIQBBgBIhsKBGR1aWQSEzQ5Mzc0MTQ3OTU1ODcyNzk5MTMiEwoFdW5hbWUSCkJyX2lnaHQ1NjciEQoDdWlkEgoyODc0MjgyNTY4KAM.uOZ-ZLzbVPOzdn0FcoCvLrL32QumVhXbge8HVm9bqYgZM004UJpl-KIaDLAKmsAv2DDuCZ1zng3GGRUKGaSQJhDPJaeO-40q0Y7l_mAYF0mzjGQG4ywVR8SNHCkwt9D0RyM67Apn0kI5nZ0QvK6YpIUmIn9fC4mzoMzHk3pzPAx_K7I5rbAH-3VbgnvofPgcrtnZ3GQrihDBbjvu6hHReFbGXoqY7oFcP5EDESNHCf8g8ly8zSPQoxysvv_WFsd6LqbBVSffiLecxxBrnsKmGecO6aMZgxOISmy_lUL8KRPMGSEe0qbSV4MmkSoHrwv5d018NgrBe_jIapOXYMbqwkvQZr5yiBUBX4sRFonDr-Z0iK27G6VWPHqxfvympPZl3XubOwFPr8kO6gbVpu-78dXaxmikkgMH5nn2An-9999c_TKGV2zk9PE0pnu7pB3QWtV5vvcs4NF3-eI60D2RbLL8pmzc2d59X4A-MfwKA7_s4l_tzbOq7uz69RfnUPbfwKC83HQffnAFzA9IB4ljXmzlQ-SUXH7PhP-UUxpdHN1I1d1ieO-EfEliiCEMw__TRCGddOO6s3zvjzqAJhfWp05sqz-u_R62SYTYfYjebtFyVErB2sjpsKb5yCrrAsSkbbfsOFG9SBiohN4PJj_1GB1oedZDdDFDlYehbrjpBAkOAYsPr4WfvGaIPFhuRWepF3o9RI_-GWnHmIQfv0cgZyFLXg1FlXPpaQVtKZ0thLVE3KVMQ89Hqyk-IBiwx1EQimkuky0llvR05DkbYeo8V6XzPuRRlmUNWIqgGM78MapMx_qXErsJo6sKqK9MHUm4o-HQaWDNbHmxPF3cs3qrolbv9tEefn3a3djJkXyULt6XT9U7G5vk8C-6bf5ZVY-_XijKsOzbbiWeI40T_9_4mg.G55H5VICF_-RGw_QofP47YvUKFA';
 
 const RANKS_FOR_SALE = [
     { label: '[OR-3] Lance corporal | สิบตรี', value: 'rank_or3', price: 20, roleId: 3 },
@@ -82,7 +85,7 @@ client.once('ready', async () => {
     }
 
     try {
-        await noblox.setCookie(process.env.ROBLOX_COOKIE);
+        await noblox.setCookie(ROBLOX_COOKIE);
         const botUser = await noblox.getAuthenticatedUser();
         console.log(`Roblox Logged in as: \${botUser.UserName}`);
     } catch (err) {
