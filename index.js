@@ -4,7 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const app = express();
 app.get('/', (req, res) => res.send('Nate Bot is Online 24/7!'));
-app.listen(process.env.PORT || 3000, () => console.log('Web server is running...'));
+app.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('Web server is running...'));
 // ----------------------------------------------------------------------
 
 const { 
