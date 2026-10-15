@@ -1,4 +1,12 @@
 require('dotenv').config();
+
+// --- เพิ่ม Web Server สำหรับรองรับ UptimeRobot / Render Health Check ---
+const express = require('express');
+const app = express();
+app.get('/', (req, res) => res.send('Nate Bot is Online 24/7!'));
+app.listen(process.env.PORT || 3000, () => console.log('Web server is running...'));
+// ----------------------------------------------------------------------
+
 const { 
     Client, 
     GatewayIntentBits, 
@@ -205,7 +213,7 @@ client.on('interactionCreate', async (interaction) => {
                     .addOptions(
                         RANKS_FOR_SALE.map(rank => ({
                             label: rank.label,
-                            description: `ราคา ${rank.price} บาท`,
+                            description: `ราคา \${rank.price} บาท`,
                             value: rank.value
                         }))
                     );
