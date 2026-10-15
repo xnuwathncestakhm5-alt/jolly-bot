@@ -1,12 +1,4 @@
 require('dotenv').config();
-
-// --- Express Web Server สำหรับ UptimeRobot / Render Health Check ---
-const express = require('express');
-const app = express();
-app.get('/', (req, res) => res.send('Nate Bot is Online 24/7!'));
-app.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('Web server is running...'));
-// ----------------------------------------------------------------------
-
 const { 
     Client, 
     GatewayIntentBits, 
@@ -37,9 +29,6 @@ const client = new Client({
 
 const userBalances = new Map(); 
 const userRobloxNames = new Map(); 
-
-// ใช้ Cookie ที่คุณส่งมาโดยตรง (หรือดึงจาก Environment Variables หากมี)
-const ROBLOX_COOKIE = process.env.ROBLOX_COOKIE || '_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEQAhoGCAIQBBgBIhsKBGR1aWQSEzQ5Mzc0MTQ3OTU1ODcyNzk5MTMiEwoFdW5hbWUSCkJyX2lnaHQ1NjciEQoDdWlkEgoyODc0MjgyNTY4KAM.w1c_kSav9fiGLw4ucSbd1MFlDnTl6uEir43v4a3ePzrIZO1ymjxvBUbWa_tJrd9Z3uhO62EXWCq8jmXThYtN9YD7VPyPun8SoPKMQbdnf9zCLdCWFUgbyoVTeHiK0dLu_1w5Y-zmFiYjL-zdEdPPKnPnxAwigVnYPu35PD_V_5cDDUUHuD6n9-qw9FEwZilgUP2D31hNsKr1ifpXguSItX8n9fvGvckr8stp-BwKcM2Oe__myhKp8cMF_fYtaMV200NYCPi9ybYVggxucRH9VB5VwlSZbBHHNtNuD4Rv1uWTKdSqvu9jwO6gX397XjxGXvewQpCLYJqYHmUGsptpmsbVXIQRzMgCeFY2zXoq4CL4EbhsDSn6DvDGJDV_eBfbiVNbldaWcyZ_tf6cXsLpDr5TTRP5vWIOG2LjM2thNfCE8xfYZhg2VEcCgF7PX2Y4bKBVwkimvGSpdnDhhgpky9OfjIcG5IxKQUrWOgInWI_jpdp9W1f-O_D9XCmwCfVpDx2z6rC7T2YbK6HYK6YErspl_XuN2EDcUhUlNidNO9yM8MEw6LAqfGUQXmbVcaOFnpGl88SKEQtTgw7qUh_1SOxuW9okV7bNJRwbYiLYnsNeKE_x_mCMen7Zug2Bc2q5uafU6W4TyvleucXdLrZHABv-VjymRbjFKiytqe_DYCvaXdjsiie6n9bM2-0UvK_sG6X2Jk2mM4Fz4nDvKdgbeFb-b9duz0pOB6PUbq8UfqIYUnBfxBBHqhnuiZ2Dm5QUfVq7yBhx2xp7IEfXNPppI1qVMynoMW5iZD0Ag-TCEj7mFzOyq-a5mCsjhdmswZdg8Ydo76CwpBlLstf7oYpwQVtRO9avWe0fmsJxWRjBqUJIvEEy7BZPeSDIotIGcBKmRcmK_X0CkN2uNAqvLSmPKQ.EWHcFb7vyn2gYumPSKjndNG8OYk';
 
 const RANKS_FOR_SALE = [
     { label: '[OR-3] Lance corporal | สิบตรี', value: 'rank_or3', price: 20, roleId: 3 },
@@ -85,7 +74,7 @@ client.once('ready', async () => {
     }
 
     try {
-        await noblox.setCookie(ROBLOX_COOKIE);
+        await noblox.setCookie(process.env.ROBLOX_COOKIE);
         const botUser = await noblox.getAuthenticatedUser();
         console.log(`Roblox Logged in as: \${botUser.UserName}`);
     } catch (err) {
@@ -216,7 +205,7 @@ client.on('interactionCreate', async (interaction) => {
                     .addOptions(
                         RANKS_FOR_SALE.map(rank => ({
                             label: rank.label,
-                            description: `ราคา \${rank.price} บาท`,
+                            description: `ราคา ${rank.price} บาท`,
                             value: rank.value
                         }))
                     );
