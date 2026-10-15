@@ -1,150 +1,338 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const express = require('express');
-const app = express();
-const port = 3000;
+require('dotenv').config();
+const { 
+    Client, 
+    GatewayIntentBits, 
+    EmbedBuilder, 
+    ActionRowBuilder, 
+    ButtonBuilder, 
+    ButtonStyle, 
+    StringSelectMenuBuilder, 
+    ModalBuilder, 
+    TextInputBuilder, 
+    TextInputStyle,
+    InteractionType,
+    REST,
+    Routes,
+    SlashCommandBuilder
+} = require('discord.js');
+const noblox = require('noblox.js');
+const voucher = require('truemoney-voucher');
+const adminSystem = require('./admin.js');
 
-// 1. ระบบ Web Server เพื่อกันบอทหลับบน Render
-app.get('/', (req, res) => {
-    res.send('Jolly is awake!');
-});
-
-app.listen(port, () => {
-    console.log(`Web Server พร้อมทำงานที่พอร์ต ${port}`);
-});
-
-// 2. สร้างตัวแปร client พร้อมเปิดสิทธิ์บอทเพลงและระบบอ่านแชทแบบครบถ้วน
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,     // สิทธิ์สำหรับอ่านลิงก์เพลงในช่องแชท
-        GatewayIntentBits.GuildVoiceStates    // สิทธิ์สำหรับให้บอทเชื่อมต่อเข้าห้องเสียง (VC)
+        GatewayIntentBits.MessageContent
     ]
 });
 
-client.once('ready', () => {
-    console.log(`บอท Jolly ออนไลน์แล้วในฐานะ: ${client.user.tag}`);
-});
+const userBalances = new Map(); 
+const userRobloxNames = new Map(); 
 
-// =======================================================
-// 3. ระบบบอทเพลง JOLLY MUSIC (ย้ายมาอยู่ตรงนี้ก่อนถึงบรรทัดล็อกอิน)
-// =======================================================
-const { DisTube } = require('distube');
-const { YouTubePlugin } = require('@distube/youtube');
-const { SpotifyPlugin } = require('@distube/spotify');
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const RANKS_FOR_SALE = [
+    { label: '[OR-3] Lance corporal | สิบตรี', value: 'rank_or3', price: 20, roleId: 3 },
+    { label: '[OR-4] Corporal | สิบโท', value: 'rank_or4', price: 30, roleId: 4 },
+    { label: '[OR-5] Sergeant | สิบเอก', value: 'rank_or5', price: 40, roleId: 5 },
+    { label: '[OR-6] Sergeant Major 3rd Class | จ่าสิบตรี', value: 'rank_or6', price: 55, roleId: 6 },
+    { label: '[OR-7] Sergeant Major 2nd Class | จ่าสิบโท', value: 'rank_or7', price: 75, roleId: 7 },
+    { label: '[OR-8] Sergeant Major 1st Class | จ่าสิบเอก', value: 'rank_or8', price: 80, roleId: 8 },
+    { label: '[OF-1A] Second Lieutenant | ร้อยตรี', value: 'rank_of1a', price: 90, roleId: 11 },
+    { label: '[OF-1B] Lieutenant | ร้อยโท', value: 'rank_of1b', price: 120, roleId: 12 },
+    { label: '[OF-2] Captain | ร้อยเอก', value: 'rank_of2', price: 150, roleId: 13 },
+    { label: '[OF-3] Major | พันตรี', value: 'rank_of3', price: 190, roleId: 14 },
+    { label: '[OF-4] Lieutenant Colonel | พันโท', value: 'rank_of4', price: 250, roleId: 15 },
+    { label: '[OF-5] Colonel | พันเอก', value: 'rank_of5', price: 300, roleId: 16 },
+    { label: '[OF-6] Senior Colonel | พันเอกพิเศษ', value: 'rank_of6', price: 360, roleId: 17 },
+    { label: '[OF-7] Major General | พลตรี', value: 'rank_of7', price: 400, roleId: 18 },
+    { label: '[OF-8] Lieutenant General | พลโท', value: 'rank_of8', price: 490, roleId: 20 },
+    { label: '[OF-9] GENERAL | พลเอก', value: 'rank_of9', price: 500, roleId: 21 },
+    { label: '[ Expert Royal Thai Army | ผู้ทรงคุณวุฒิกองทัพบก ]', value: 'rank_expert', price: 600, roleId: 22 }
+];
 
-const distube = new DisTube(client, {
-    plugins: [new YouTubePlugin(), new SpotifyPlugin()],
-    leaveOnFinish: false, 
-    emitNewSongOnly: true
-});
+// นิยามคำสั่ง /setup-shop
+const commands = [
+    new SlashCommandBuilder()
+        .setName('setup-shop')
+        .setDescription('เปิดหน้าต่างตั้งค่าและติดตั้งหน้าร้านค้า')
+].map(command => command.toJSON());
 
-// 🆔 ไอดีห้อง #ใส่เพลง ของคุณใส่ไว้ตรงนี้เรียบร้อยแล้ว
-const MUSIC_CHANNEL_ID = '1513129957641949247'; 
-
-let leaveTimeout = null;
-
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-    if (message.channel.id !== MUSIC_CHANNEL_ID) return;
-
-    const voiceChannel = message.member.voice.channel;
-    if (!voiceChannel) {
-        return message.reply('❌ คุณต้องเข้าห้องเสียง (VC) ก่อนถึงจะสั่งเปิดเพลงได้ครับ!');
-    }
-
-    const query = message.content.trim();
-    if (!query) return;
-
-    if (leaveTimeout) {
-        clearTimeout(leaveTimeout);
-        leaveTimeout = null;
+client.once('ready', async () => {
+    console.log(`Log in as \${client.user.tag}`);
+    
+    // ลงทะเบียน Slash Commands อัตโนมัติ
+    try {
+        const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+        console.log('กำลังลงทะเบียน Slash Commands (/)...');
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: commands }
+        );
+        console.log('✅ ลงทะเบียน Slash Commands สำเร็จ!');
+    } catch (error) {
+        console.error('❌ ลงทะเบียน Slash Commands ไม่สำเร็จ:', error);
     }
 
     try {
-        await message.channel.send('🎵 **เพลงจะมาภายใน 3 วิ...**');
-        await distube.play(voiceChannel, query, {
-            textChannel: message.channel,
-            member: message.member
-        });
-    } catch (error) {
-        console.error(error);
-        message.channel.send('❌ เกิดข้อผิดพลาด ไม่สามารถดึงลิงก์นี้มาเล่นได้ครับ');
+        await noblox.setCookie(process.env.ROBLOX_COOKIE);
+        const botUser = await noblox.getAuthenticatedUser();
+        console.log(`Roblox Logged in as: \${botUser.UserName}`);
+    } catch (err) {
+        console.error('Roblox Login Failed:', err);
     }
 });
 
-distube.on('playSong', (queue, song) => {
-    const embed = new EmbedBuilder()
-        .setTitle(`💿 กำลังเปิดเพลง: ${song.name}`)
-        .setURL(song.url)
-        .setThumbnail(song.thumbnail)
-        .setColor('#1DB954')
-        .addFields(
-            { name: '⏳ ความยาว', value: song.formattedDuration, inline: true },
-            { name: '👤 คนขอเพลง', value: `${song.user}`, inline: true },
-            { name: '🎼 เพลงถัดไปในคิว', value: `${queue.songs.length - 1} เพลง`, inline: true }
-        )
-        .setFooter({ text: 'บอท Jolly ระบบจัดการเพลงอัตโนมัติ' });
-
-    const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('music_pause_resume').setLabel('⏸️ เล่น/หยุด').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('music_skip').setLabel('⏭️ ข้ามเพลง').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('music_stop').setLabel('⏹️ ปิดเพลง/ล้างคิว').setStyle(ButtonStyle.Danger)
-    );
-
-    queue.textChannel.send({ embeds: [embed], components: [buttons] });
+// ฟังคำสั่งในแชทปกติ (สำหรับ admin.js)
+client.on('messageCreate', async (message) => {
+    await adminSystem.handleAdminCommands(message, userBalances, userRobloxNames);
 });
 
+// ฟัง Interaction (Slash Commands, Buttons, Menus, Modals)
 client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isButton()) return;
+    try {
+        // 1. จัดการ Slash Command: /setup-shop
+        if (interaction.isChatInputCommand()) {
+            if (interaction.commandName === 'setup-shop') {
+                const adminEmbed = new EmbedBuilder()
+                    .setTitle('🛠️ ระบบจัดการร้านค้า — Auto Shop')
+                    .setDescription('กดปุ่มด้านล่างเพื่อส่ง UI หน้าร้านค้าซื้อยศลงในช่องนี้')
+                    .setColor('#2563EB');
 
-    const queue = distube.getQueue(interaction.guildId);
-    if (!queue) return interaction.reply({ content: '⚠️ ขณะนี้ไม่มีเพลงเล่นอยู่ในคิวครับ', ephemeral: true });
+                const adminRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('send_shop_ui_btn')
+                        .setLabel('🛒 ส่ง UI ร้านค้า')
+                        .setStyle(ButtonStyle.Success)
+                );
 
-    if (interaction.customId === 'music_pause_resume') {
-        if (queue.paused) {
-            queue.resume();
-            await interaction.reply({ content: '▶️ เล่นเพลงต่อเรียบร้อยแล้ว', ephemeral: true });
-        } else {
-            queue.pause();
-            await interaction.reply({ content: '⏸️ หยุดเพลงชั่วคราวแล้ว', ephemeral: true });
-        }
-    } else if (interaction.customId === 'music_skip') {
-        try {
-            if (queue.songs.length <= 1) {
-                queue.stop();
-                await interaction.reply({ content: '⏭️ ไม่มีเพลงต่อในคิว ระบบปิดเพลงให้แล้วครับ', ephemeral: true });
-            } else {
-                await distube.skip(interaction.guildId);
-                await interaction.reply({ content: '⏭️ ข้ามเพลงให้แล้วครับ', ephemeral: true });
+                await interaction.reply({ 
+                    embeds: [adminEmbed], 
+                    components: [adminRow], 
+                    flags: 64 // เห็นเฉพาะแอดมินที่ใช้คำสั่ง
+                });
             }
-        } catch (err) {
-            await interaction.reply({ content: '❌ ไม่สามารถข้ามเพลงได้', ephemeral: true });
         }
-    } else if (interaction.customId === 'music_stop') {
-        queue.stop();
-        await interaction.reply({ content: '⏹️ ปิดเพลงและล้างคิวเพลงทั้งหมดเรียบร้อยแล้วครับ', ephemeral: true });
+
+        // 2. จัดการการกดปุ่ม (Buttons)
+        if (interaction.isButton()) {
+            const userId = interaction.user.id;
+            const currentBalance = userBalances.get(userId) || 0;
+            const savedRobloxName = userRobloxNames.get(userId);
+
+            // ปุ่มแอดมินกดสั่งส่ง UI ร้านค้า
+            if (interaction.customId === 'send_shop_ui_btn') {
+                const shopEmbed = new EmbedBuilder()
+                    .setTitle('🟢 โดเนท')
+                    .setDescription('ระบบซื้อยศอัตโนมัติ - เปิดบริการ 24 ชั่วโมง')
+                    .setColor('#10B981')
+                    .setImage('https://kommodo.ai/i/QekVzsP7LKeL1HfcBLlH');
+
+                const shopRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('buy_rank_btn')
+                        .setLabel('ซื้อยศ Roblox')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('topup_btn')
+                        .setLabel('เติมเงิน — TrueWallet')
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId('check_balance_btn')
+                        .setLabel('ดูยอดเงิน')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+                await interaction.channel.send({ embeds: [shopEmbed], components: [shopRow] });
+                return await interaction.reply({ content: '✅ ส่ง UI หน้าร้านค้าเรียบร้อยแล้ว!', flags: 64 });
+            }
+
+            if (interaction.customId === 'buy_rank_btn') {
+                if (!savedRobloxName) {
+                    const modal = new ModalBuilder()
+                        .setCustomId('roblox_name_modal')
+                        .setTitle('กรอกชื่อ Roblox ของคุณ');
+
+                    const nameInput = new TextInputBuilder()
+                        .setCustomId('roblox_username')
+                        .setLabel('ชื่อ Roblox Username')
+                        .setStyle(TextInputStyle.Short)
+                        .setPlaceholder('ตัวอย่าง: Br_ight567')
+                        .setRequired(true);
+
+                    modal.addComponents(new ActionRowBuilder().addComponents(nameInput));
+                    return await interaction.showModal(modal);
+                }
+
+                await interaction.deferReply({ flags: 64 });
+
+                let currentRankText = 'ไม่พบข้อมูลยศ';
+                try {
+                    const robloxId = await noblox.getIdFromUsername(savedRobloxName);
+                    console.log('กำลังเช็กยศในกลุ่ม ID:', process.env.ROBLOX_GROUP_ID, 'ของ ID:', robloxId);
+                    currentRankText = await noblox.getRankNameInGroup(process.env.ROBLOX_GROUP_ID, robloxId);
+                } catch (e) {
+                    console.error('❌ ดึงยศไม่สำเร็จเพราะ:', e.message);
+                    currentRankText = 'ยังไม่ได้เข้ากลุ่ม หรือไม่พบชื่อ';
+                }
+
+                const confirmEmbed = new EmbedBuilder()
+                    .setTitle('ยืนยันข้อมูลของคุณ')
+                    .setDescription('กรุณาตรวจสอบข้อมูลด้านล่าง ว่าใช่บัญชีที่คุณต้องการซื้อยศหรือไม่')
+                    .setColor('#2563EB')
+                    .addFields({
+                        name: 'ข้อมูล',
+                        value: `\`\`\`Roblox : ${savedRobloxName}\nยศปัจจุบัน : ${currentRankText}\nยอดเงิน : ${currentBalance} ฿\`\`\``
+                    });
+
+                const confirmRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('confirm_identity_yes')
+                        .setLabel('ใช่ ข้อมูลของฉัน')
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId('confirm_identity_no')
+                        .setLabel('ไม่ใช่ข้อมูลของฉัน')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+                return await interaction.editReply({ embeds: [confirmEmbed], components: [confirmRow] });
+            }
+
+            if (interaction.customId === 'confirm_identity_yes') {
+                const selectMenu = new StringSelectMenuBuilder()
+                    .setCustomId('select_rank_menu')
+                    .setPlaceholder('เลือกยศที่ต้องการซื้อ')
+                    .addOptions(
+                        RANKS_FOR_SALE.map(rank => ({
+                            label: rank.label,
+                            description: `ราคา ${rank.price} บาท`,
+                            value: rank.value
+                        }))
+                    );
+
+                const rankEmbed = new EmbedBuilder()
+                    .setTitle('เลือกยศที่ต้องการซื้อ')
+                    .setDescription('เลือกยศที่ต้องการจากเมนูด้านล่าง')
+                    .setColor('#F59E0B');
+
+                await interaction.update({ embeds: [rankEmbed], components: [new ActionRowBuilder().addComponents(selectMenu)] });
+            }
+
+            if (interaction.customId === 'confirm_identity_no') {
+                const modal = new ModalBuilder()
+                    .setCustomId('roblox_name_modal')
+                    .setTitle('แก้ไขชื่อ Roblox ของคุณ');
+
+                const nameInput = new TextInputBuilder()
+                    .setCustomId('roblox_username')
+                    .setLabel('ชื่อ Roblox Username ใหม่')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                modal.addComponents(new ActionRowBuilder().addComponents(nameInput));
+                await interaction.showModal(modal);
+            }
+
+            if (interaction.customId === 'topup_btn') {
+                const modal = new ModalBuilder()
+                    .setCustomId('topup_modal')
+                    .setTitle('เติมเงินผ่าน TrueMoney Wallet');
+
+                const walletInput = new TextInputBuilder()
+                    .setCustomId('truemoney_link')
+                    .setLabel('ลิงก์ซองเปา TrueMoney')
+                    .setStyle(TextInputStyle.Short)
+                    .setPlaceholder('https://gift.truemoney.com/campaign/?v=...')
+                    .setRequired(true);
+
+                modal.addComponents(new ActionRowBuilder().addComponents(walletInput));
+                await interaction.showModal(modal);
+            }
+
+            if (interaction.customId === 'check_balance_btn') {
+                const embed = new EmbedBuilder()
+                    .setTitle('💎 ยอดของคุณ')
+                    .setDescription(`\`\`\`ยอดคงเหลือ : ${currentBalance} ฿\`\`\``)
+                    .setColor('#3B82F6');
+
+                await interaction.reply({ embeds: [embed], flags: 64 });
+            }
+        }
+
+        // 3. จัดการการส่งฟอร์ม (Modal Submit)
+        if (interaction.type === InteractionType.ModalSubmit) {
+            
+            if (interaction.customId === 'roblox_name_modal') {
+                const robloxName = interaction.fields.getTextInputValue('roblox_username');
+                userRobloxNames.set(interaction.user.id, robloxName);
+
+                await interaction.reply({ 
+                    content: `บันทึกชื่อ Roblox: **${robloxName}** เรียบร้อยแล้ว! กรุณากดปุ่ม **ซื้อยศ Roblox** อีกครั้ง`, 
+                    flags: 64
+                });
+            }
+
+            if (interaction.customId === 'topup_modal') {
+                const voucherLink = interaction.fields.getTextInputValue('truemoney_link');
+                await interaction.deferReply({ flags: 64 });
+
+                try {
+                    const result = await voucher(process.env.PHONE_NUMBER, voucherLink);
+                    const amount = parseFloat(result.amount);
+                    const currentBal = userBalances.get(interaction.user.id) || 0;
+                    userBalances.set(interaction.user.id, currentBal + amount);
+
+                    await interaction.editReply({
+                        content: `✅ เติมเงินสำเร็จจำนวน **${amount}** บาท! ยอดเงินคงเหลือของคุณคือ **${currentBal + amount}** บาท`
+                    });
+                } catch (err) {
+                    await interaction.editReply({ content: '❌ ลิงก์ซองอั่งเปาไม่ถูกต้อง หรือถูกใช้งานไปแล้ว' });
+                }
+            }
+        }
+
+        // 4. จัดการการเลือกในดร็อปดาวน์ (Select Menu)
+        if (interaction.isStringSelectMenu() && interaction.customId === 'select_rank_menu') {
+            const selectedValue = interaction.values[0];
+            const rankInfo = RANKS_FOR_SALE.find(r => r.value === selectedValue);
+            const userId = interaction.user.id;
+            const balance = userBalances.get(userId) || 0;
+            const robloxName = userRobloxNames.get(userId);
+
+            if (balance < rankInfo.price) {
+                return await interaction.reply({ 
+                    content: `❌ ยอดเงินของคุณไม่พอ! ยศนี้ราคา ${rankInfo.price} ฿ แต่งวดเงินของคุณมีเพียง ${balance} ฿`, 
+                    flags: 64
+                });
+            }
+
+            await interaction.deferReply({ flags: 64 });
+
+            try {
+                const robloxId = await noblox.getIdFromUsername(robloxName);
+                const rankInGroup = await noblox.getRankInGroup(process.env.ROBLOX_GROUP_ID, robloxId);
+                
+                if (rankInGroup === 0) {
+                    return await interaction.editReply({
+                        content: `⚠️ คุณยังไม่ได้เข้ากลุ่ม Roblox!\nกรุณาเข้ากลุ่มผ่านลิงก์นี้ก่อนสั่งซื้อ: https://www.roblox.com/th/communities/33706192/Royal-Thai-Army#!/about`
+                    });
+                }
+
+                await noblox.setRank(process.env.ROBLOX_GROUP_ID, robloxId, rankInfo.roleId);
+                userBalances.set(userId, balance - rankInfo.price);
+
+                await interaction.editReply({
+                    content: `🎉 ขอบคุณที่ซื้อยศ! ระบบได้ปรับยศ **${rankInfo.label}** ให้กับไอดี **${robloxName}** เรียบร้อยแล้ว`
+                });
+
+            } catch (error) {
+                console.error(error);
+                await interaction.editReply({ content: '❌ เกิดข้อผิดพลาดในการปรับยศ กรุณาติดต่อแอดมิน' });
+            }
+        }
+    } catch (err) {
+        console.error('Interaction Error:', err);
     }
 });
 
-distube.on('finish', (queue) => {
-    queue.textChannel.send(`⚠️ **เพลงหมดคิวแล้ว!** ถ้ายังไม่กรอกเพลงภายใน 20 วินาที บอทจะทำการออก VC ทันที!`);
-
-    leaveTimeout = setTimeout(() => {
-        const checkQueue = distube.getQueue(queue.id);
-        if (!checkQueue || checkQueue.songs.length === 0) {
-            distube.voices.leave(queue.id);
-            queue.textChannel.send('🚪 บอทออกจากห้องเสียง (VC) เรียบร้อยเนื่องจากไม่มีการส่งเพลงเพิ่มเติมครับ');
-        }
-    }, 20000);
-});
-
-distube.on('addSong', (queue, song) => {
-    queue.textChannel.send(`✅ เพิ่มเพลง **${song.name}** เข้าสู่คิวเรียบร้อยแล้วคิวต่อไปเตรียมรันเลย!`);
-});
-
-// =======================================================
-// 🛑 บรรทัดล็อกอิน (ต้องอยู่ล่างสุดของไฟล์แบบนี้เสมอ)
-// =======================================================
-client.login('MTUxMzeNzExNzKxNDc1NzczNTU1NG.Gfkk8r.GsKomloSIIS3CJAf3H7KtwkzZUFdLFolG0Hg2U');
+client.login(process.env.DISCORD_TOKEN);
