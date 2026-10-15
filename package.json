@@ -9,7 +9,8 @@
   "dependencies": {
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
-    "noblox.js": "^5.0.0",
+    "noblox.js": "^4.15.0",
+    "truemoney-voucher": "^1.0.3",
     "distube": "^5.0.3",
     "@distube/youtube": "^1.0.1",
     "@discordjs/voice": "^0.16.1",
